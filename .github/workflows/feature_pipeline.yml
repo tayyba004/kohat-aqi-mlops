@@ -1,0 +1,33 @@
+name: Hourly AQI Data Ingestion Pipeline
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install requests pandas numpy
+
+      - name: Execute Feature Pipeline
+        run: |
+          python -c "
+          import requests, pandas as pd
+          LAT, LON = 33.5889, 71.4429
+          aqi_url = f'https://air-quality-api.open-meteo.com/v1/air-quality?latitude={LAT}&longitude={LON}&hourly=pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone,european_aqi&past_days=2'
+          res = requests.get(aqi_url).json()
+          df = pd.DataFrame(res['hourly'])
+          print(f'Pipeline Heartbeat Check | Total Records Ingested: {len(df)}')
+          "
