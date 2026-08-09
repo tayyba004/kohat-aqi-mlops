@@ -166,3 +166,4 @@ with tab2:
 with tab3:
     st.subheader("Latest Environmental Parameters in Kohat")
     st.dataframe(X_live.T.rename(columns={X_live.index[0]: 'Value'}))
+
