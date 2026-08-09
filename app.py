@@ -159,7 +159,7 @@ with tab2:
     st.markdown("This chart reveals which environmental variables have the strongest impact on AQI forecasts.")
     try:
         image = Image.open('shap_summary.png')
-        st.image(image, caption='SHAP Feature Importance Summary Plot', use_column_width=True)
+        st.image(image, caption='SHAP Feature Importance Summary Plot', use_container_width=True)
     except FileNotFoundError:
         st.warning("SHAP plot image 'shap_summary.png' not found.")
 
