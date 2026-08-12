@@ -15,7 +15,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🌤️ PearlShine Kohat Air Quality Index (AQI) 3-Day Serverless Forecaster")
+st.title("🌤️ 10Pearls Shine – Kohat (AQI) 3-Day Serverless Forecaster")
 st.markdown("Automated Machine Learning pipeline predicting Air Quality Index using live Open-Meteo weather data.")
 
 # Coordinates for Kohat
