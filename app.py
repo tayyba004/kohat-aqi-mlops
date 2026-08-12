@@ -11,11 +11,11 @@ from PIL import Image
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="Kohat AQI 3-Day Forecast",
-    page_icon="🌫️",
+    page_icon="🌤️",
     layout="wide"
 )
 
-st.title("🌫️ Kohat Air Quality Index (AQI) 3-Day Serverless Forecaster")
+st.title("🌤️ PearlShine Kohat Air Quality Index (AQI) 3-Day Serverless Forecaster")
 st.markdown("Automated Machine Learning pipeline predicting Air Quality Index using live Open-Meteo weather data.")
 
 # Coordinates for Kohat
