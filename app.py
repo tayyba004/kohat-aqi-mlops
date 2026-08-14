@@ -19,21 +19,36 @@ st.caption("Automated Machine Learning pipeline predicting Air Quality Index usi
 # ---------------------------------------------------------
 # 2. LOAD & MERGE CSV DATASETS
 # ---------------------------------------------------------
+
+        
 @st.cache_data
 def fetch_live_features():
-    """Load and merge local air quality and weather CSV files."""
-    # ⚠️ Make sure these filenames match your uploaded files on GitHub!
-    aqi_file = "air quality.csv"   
-    weather_file = "weather.csv"   
+    aqi_file = "air quality.csv"   # Match your exact GitHub filename
+    weather_file = "weather.csv"   # Match your exact GitHub filename
     
     if not os.path.exists(aqi_file) or not os.path.exists(weather_file):
-        st.error(f"⚠️ Missing files! Could not find `{aqi_file}` or `{weather_file}` in the repository root.")
+        st.error(f"⚠️ Missing files! Could not find `{aqi_file}` or `{weather_file}` in repo root.")
         st.stop()
         
-    df_aqi = pd.read_csv(aqi_file)
-    df_weather = pd.read_csv(weather_file)
+    try:
+        # 1. Skip the top 3 lines of metadata for the Air Quality CSV
+        df_aqi = pd.read_csv(aqi_file, skiprows=3)
+    except Exception as e:
+        st.error(f"❌ Error reading `{aqi_file}`: {e}")
+        st.stop()
+
+    try:
+        # 2. Check if weather CSV also has metadata; if so, add skiprows=3 here too
+        df_weather = pd.read_csv(weather_file, skiprows=3)
+    except Exception:
+        # Fallback if weather file doesn't have metadata lines at top
+        df_weather = pd.read_csv(weather_file)
     
-    # Parse timestamps and sort
+    # 3. Clean up column names (removes units like ' (μg/m³)' if present)
+    df_aqi.columns = [c.split(' ')[0] for c in df_aqi.columns]
+    df_weather.columns = [c.split(' ')[0] for c in df_weather.columns]
+
+    # 4. Parse timestamps and merge
     df_aqi['time'] = pd.to_datetime(df_aqi['time'])
     df_weather['time'] = pd.to_datetime(df_weather['time'])
     
