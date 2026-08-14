@@ -22,8 +22,8 @@ st.caption("Automated Machine Learning pipeline predicting Air Quality Index usi
 @st.cache_data
 def fetch_live_features():
     # ⚠️ MAKE SURE THESE FILENAMES MATCH EXACTLY WITH YOUR GITHUB REPO
-    aqi_file = "air_quality_data.csv"   
-    weather_file = "weather_data.csv"   
+    aqi_file = "air quality.csv"   
+    weather_file = "weather.csv"   
     
     if not os.path.exists(aqi_file) or not os.path.exists(weather_file):
         st.error(f"⚠️ Files missing in repository! Could not find `{aqi_file}` or `{weather_file}`.")
