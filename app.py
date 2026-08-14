@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import requests
+import os
 import joblib
 
 # ---------------------------------------------------------
@@ -14,83 +14,110 @@ st.set_page_config(
 )
 
 st.title("🍃 Kohat Air Quality Index (AQI) 3-Day Forecaster")
-st.caption("Automated Machine Learning pipeline predicting Air Quality Index using Open-Meteo data.")
-
-LAT = 33.5869
-LON = 71.4414
+st.caption("Automated Machine Learning pipeline predicting Air Quality Index using local weather and air quality datasets.")
 
 # ---------------------------------------------------------
-# 2. CACHED DATA FETCHING WITH FALLBACK
+# 2. LOAD & MERGE CSV DATASETS
 # ---------------------------------------------------------
-@st.cache_data(ttl=3600)  # Cache for 1 hour to prevent API rate-limit errors
+@st.cache_data
 def fetch_live_features():
-    """Fetches recent weather/AQI data. Falls back gracefully if API limit is hit."""
-    aqi_url = f"https://air-quality-api.open-meteo.com/v1/air-quality?latitude={LAT}&longitude={LON}&hourly=pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone,european_aqi&past_days=2"
-    weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m&past_days=2"
+    """Load and merge local air quality and weather CSV files."""
+    # ⚠️ Make sure these filenames match your uploaded files on GitHub!
+    aqi_file = "open-meteo-air quality33.6ON71.4OE5O4m.csv"   
+    weather_file = "open-meteo-weather33.57N71.49E5O4m.csv"   
     
-    try:
-        res_aqi = requests.get(aqi_url, timeout=5).json()
-        res_weather = requests.get(weather_url, timeout=5).json()
-
-        if 'hourly' not in res_aqi or 'hourly' not in res_weather:
-            st.warning("⚠️ Open-Meteo API limit reached. Displaying operational fallback data.")
-            return generate_fallback_data()
-
-        df_aqi = pd.DataFrame(res_aqi['hourly'])
-        df_weather = pd.DataFrame(res_weather['hourly'])
-
-        df_aqi['time'] = pd.to_datetime(df_aqi['time'])
-        df_weather['time'] = pd.to_datetime(df_weather['time'])
+    if not os.path.exists(aqi_file) or not os.path.exists(weather_file):
+        st.error(f"⚠️ Missing files! Could not find `{aqi_file}` or `{weather_file}` in the repository root.")
+        st.stop()
         
-        df = pd.merge(df_aqi, df_weather, on='time')
+    df_aqi = pd.read_csv(aqi_file)
+    df_weather = pd.read_csv(weather_file)
+    
+    # Parse timestamps and sort
+    df_aqi['time'] = pd.to_datetime(df_aqi['time'])
+    df_weather['time'] = pd.to_datetime(df_weather['time'])
+    
+    df = pd.merge(df_aqi, df_weather, on='time').sort_values('time').reset_index(drop=True)
+    
+    if 'european_aqi' in df.columns:
         df.rename(columns={'european_aqi': 'aqi'}, inplace=True)
-        return df
+        
+    return df
 
-    except Exception:
-        st.warning("⚠️ Network/API issue. Displaying operational fallback data.")
-        return generate_fallback_data()
-
-def generate_fallback_data():
-    """Generates synthetic hourly data so the dashboard stays live even during API downtime."""
-    timestamps = pd.date_range(end=pd.Timestamp.now(), periods=48, freq='h')
-    data = {
-        'time': timestamps,
-        'pm10': np.random.uniform(20, 50, 48),
-        'pm2_5': np.random.uniform(10, 30, 48),
-        'carbon_monoxide': np.random.uniform(200, 400, 48),
-        'nitrogen_dioxide': np.random.uniform(10, 25, 48),
-        'sulphur_dioxide': np.random.uniform(2, 8, 48),
-        'ozone': np.random.uniform(15, 35, 48),
-        'aqi': np.random.uniform(40, 65, 48),
-        'temperature_2m': np.random.uniform(22, 32, 48),
-        'relative_humidity_2m': np.random.uniform(40, 70, 48),
-        'wind_speed_10m': np.random.uniform(5, 15, 48),
-        'wind_direction_10m': np.random.uniform(0, 360, 48)
-    }
-    return pd.DataFrame(data)
-
-# ---------------------------------------------------------
-# 3. LOAD DATA & DISPLAY METRICS
-# ---------------------------------------------------------
 df_live = fetch_live_features()
 latest_row = df_live.iloc[-1]
 
-st.subheader("📍 Current Air Quality Metrics (Kohat)")
+# ---------------------------------------------------------
+# 3. CURRENT METRICS DISPLAY
+# ---------------------------------------------------------
+st.subheader("📍 Latest Recorded Environmental Metrics (Kohat)")
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("PM2.5", f"{latest_row['pm2_5']:.1f} µg/m³")
-col2.metric("PM10", f"{latest_row['pm10']:.1f} µg/m³")
-col3.metric("Temperature", f"{latest_row['temperature_2m']:.1f} °C")
-col4.metric("Humidity", f"{latest_row['relative_humidity_2m']:.1f} %")
+
+col1.metric("PM2.5", f"{latest_row.get('pm2_5', 0):.1f} µg/m³")
+col2.metric("PM10", f"{latest_row.get('pm10', 0):.1f} µg/m³")
+col3.metric("Temperature", f"{latest_row.get('temperature_2m', 0):.1f} °C")
+col4.metric("Humidity", f"{latest_row.get('relative_humidity_2m', 0):.1f} %")
 
 # ---------------------------------------------------------
-# 4. MODEL EVALUATION SIDEBAR
+# 4. LOAD MODELS & GENERATE 3-DAY AQI FORECAST
 # ---------------------------------------------------------
-st.sidebar.header("📊 Model Evaluation (MAE)")
-st.sidebar.metric("Day 1 Model Error", "±5.82 AQI", help="Ridge Regression")
-st.sidebar.metric("Day 2 Model Error", "±7.59 AQI", help="Random Forest")
-st.sidebar.metric("Day 3 Model Error", "±8.10 AQI", help="Ridge Regression")
+st.markdown("---")
+st.subheader("🔮 3-Day Air Quality Index Forecast")
 
-st.success("✅ Dashboard successfully loaded and running!")
+@st.cache_resource
+def load_models():
+    m1 = joblib.load("best_aqi_model_day1.pkl")
+    m2 = joblib.load("best_aqi_model_day2.pkl")
+    m3 = joblib.load("best_aqi_model_day3.pkl")
+    return m1, m2, m3
+
+try:
+    model1, model2, model3 = load_models()
+    
+    # Drop timestamp or non-feature columns if needed before feeding to model
+    feature_cols = [c for c in df_live.columns if c not in ['time', 'date']]
+    X_input = df_live[feature_cols].iloc[[-1]]
+
+    pred_day1 = model1.predict(X_input)[0]
+    pred_day2 = model2.predict(X_input)[0]
+    pred_day3 = model3.predict(X_input)[0]
+
+    fc1, fc2, fc3 = st.columns(3)
+    fc1.metric("Day 1 Forecast", f"{pred_day1:.1f} AQI")
+    fc2.metric("Day 2 Forecast", f"{pred_day2:.1f} AQI")
+    fc3.metric("Day 3 Forecast", f"{pred_day3:.1f} AQI")
+
+    # Forecast Trend Line Chart
+    forecast_df = pd.DataFrame({
+        "Day": ["Day 1", "Day 2", "Day 3"],
+        "Predicted AQI": [pred_day1, pred_day2, pred_day3]
+    }).set_index("Day")
+
+    st.line_chart(forecast_df)
+
+except Exception as e:
+    st.info("💡 Make sure model `.pkl` files are present in the repo to display live model predictions.")
+
+# ---------------------------------------------------------
+# 5. MODEL EVALUATION & EXPLAINABILITY
+# ---------------------------------------------------------
+st.sidebar.header("📊 Model Metrics")
+st.sidebar.metric("Day 1 MAE", "±5.82 AQI")
+st.sidebar.metric("Day 2 MAE", "±7.59 AQI")
+st.sidebar.metric("Day 3 MAE", "±8.10 AQI")
+
+if os.path.exists("shap_summary.png"):
+    st.markdown("---")
+    st.subheader("🔍 Model Interpretability (SHAP Analysis)")
+    st.image("shap_summary.png", caption="Feature Importance & SHAP Values", use_container_width=True)
+
+
+
+
+   
+        
+
+
 
    
     
