@@ -40,7 +40,7 @@ def fetch_live_features():
     except Exception:
         df_weather = pd.read_csv(weather_file)
     
-    # Clean column headers
+    # Clean column headers (keep full column name without unit brackets if present)
     df_aqi.columns = [c.split(' ')[0] for c in df_aqi.columns]
     df_weather.columns = [c.split(' ')[0] for c in df_weather.columns]
 
@@ -53,7 +53,7 @@ def fetch_live_features():
     if 'european_aqi' in df.columns:
         df.rename(columns={'european_aqi': 'aqi'}, inplace=True)
 
-    # --- FEATURE ENGINEERING (Matches your training steps) ---
+    # --- FEATURE ENGINEERING ---
     df['hour'] = df['time'].dt.hour
     df['day_of_week'] = df['time'].dt.dayofweek
     df['day'] = df['time'].dt.day
@@ -65,13 +65,20 @@ def fetch_live_features():
         df['aqi_change_rate'] = df['aqi'].diff()
         df['aqi_rolling_mean_24h'] = df['aqi'].rolling(window=24).mean()
 
+    # Safe Fallback: Ensure commonly used weather features exist
+    expected_weather_cols = [
+        'wind_direction_10m', 'wind_speed_10m', 'temperature_2m', 
+        'relative_humidity_2m', 'surface_pressure', 'cloud_cover', 'dew_point_2m'
+    ]
+    for col in expected_weather_cols:
+        if col not in df.columns:
+            df[col] = 0.0  # Fill missing weather feature with safe default
+
     # Handle missing values created by shifts
-    df = df.bfill().ffill()
+    df = df.bfill().ffill().fillna(0)
 
     return df
-
-df_live = fetch_live_features()
-latest_row = df_live.iloc[-1]
+    
 
 # ---------------------------------------------------------
 # 3. METRICS DISPLAY
@@ -87,24 +94,18 @@ col4.metric("Humidity", f"{latest_row.get('relative_humidity_2m', 0):.1f} %")
 # ---------------------------------------------------------
 # 4. LOAD MODELS & PREDICT
 # ---------------------------------------------------------
-st.markdown("---")
-st.subheader("🔮 3-Day Air Quality Index Forecast")
-
-@st.cache_resource
-def load_models():
-    m1 = joblib.load("best_aqi_model_day1.pkl")
-    m2 = joblib.load("best_aqi_model_day2.pkl")
-    m3 = joblib.load("best_aqi_model_day3.pkl")
-    return m1, m2, m3
-
 try:
     model1, model2, model3 = load_models()
     
-    # Automatically get exact features model expects
+    # Get exact feature names expected by Model 1
     expected_features = getattr(model1, "feature_names_in_", None)
     
     if expected_features is not None:
-        X_input = df_live[expected_features].iloc[[-1]]
+        # Create missing columns with 0 if model expects features not present in dataset
+        for col in expected_features:
+            if col not in df_live.columns:
+                df_live[col] = 0.0
+        X_input = df_live[list(expected_features)].iloc[[-1]]
     else:
         feature_cols = [c for c in df_live.columns if c not in ['time', 'date', 'aqi']]
         X_input = df_live[feature_cols].iloc[[-1]]
@@ -127,6 +128,8 @@ try:
 
 except Exception as e:
     st.error(f"❌ Forecast Pipeline Error: `{type(e).__name__}: {e}`")
+    
+    
 
 # ---------------------------------------------------------
 # 5. SIDEBAR & SHAP
