@@ -21,15 +21,15 @@ st.caption("Automated Machine Learning pipeline predicting Air Quality Index usi
 # ---------------------------------------------------------
 @st.cache_data
 def fetch_live_features():
-    # ⚠️ UPDATE THESE FILENAMES IF YOUR FILES ARE NAMED DIFFERENTLY ON GITHUB
-    aqi_file = "air quality.csv"   
-    weather_file = "weather.csv"   
+    # ⚠️ MAKE SURE THESE FILENAMES MATCH EXACTLY WITH YOUR GITHUB REPO
+    aqi_file = "air_quality_data.csv"   
+    weather_file = "weather_data.csv"   
     
     if not os.path.exists(aqi_file) or not os.path.exists(weather_file):
         st.error(f"⚠️ Files missing in repository! Could not find `{aqi_file}` or `{weather_file}`.")
         st.stop()
         
-    # Read CSV files, skipping top metadata if present
+    # Read CSV files, skipping top metadata lines if present
     try:
         df_aqi = pd.read_csv(aqi_file, skiprows=3)
     except Exception:
@@ -40,7 +40,7 @@ def fetch_live_features():
     except Exception:
         df_weather = pd.read_csv(weather_file)
     
-    # Clean column headers (keep full column name without unit brackets if present)
+    # Clean column headers
     df_aqi.columns = [c.split(' ')[0] for c in df_aqi.columns]
     df_weather.columns = [c.split(' ')[0] for c in df_weather.columns]
 
@@ -65,20 +65,19 @@ def fetch_live_features():
         df['aqi_change_rate'] = df['aqi'].diff()
         df['aqi_rolling_mean_24h'] = df['aqi'].rolling(window=24).mean()
 
-    # Safe Fallback: Ensure commonly used weather features exist
-    expected_weather_cols = [
-        'wind_direction_10m', 'wind_speed_10m', 'temperature_2m', 
-        'relative_humidity_2m', 'surface_pressure', 'cloud_cover', 'dew_point_2m'
-    ]
-    for col in expected_weather_cols:
-        if col not in df.columns:
-            df[col] = 0.0  # Fill missing weather feature with safe default
-
-    # Handle missing values created by shifts
+    # Fill missing values from shifts
     df = df.bfill().ffill().fillna(0)
 
     return df
-    
+
+df_live = fetch_live_features()
+latest_row = df_live.iloc[-1]
+
+# Safe helper function to read metrics from Pandas Series
+def get_val(row, col_name, default=0.0):
+    if col_name in row.index and pd.notna(row[col_name]):
+        return float(row[col_name])
+    return float(default)
 
 # ---------------------------------------------------------
 # 3. METRICS DISPLAY
@@ -86,14 +85,24 @@ def fetch_live_features():
 st.subheader("📍 Latest Recorded Environmental Metrics (Kohat)")
 col1, col2, col3, col4 = st.columns(4)
 
-col1.metric("PM2.5", f"{latest_row.get('pm2_5', 0):.1f} µg/m³")
-col2.metric("PM10", f"{latest_row.get('pm10', 0):.1f} µg/m³")
-col3.metric("Temperature", f"{latest_row.get('temperature_2m', 0):.1f} °C")
-col4.metric("Humidity", f"{latest_row.get('relative_humidity_2m', 0):.1f} %")
+col1.metric("PM2.5", f"{get_val(latest_row, 'pm2_5'):.1f} µg/m³")
+col2.metric("PM10", f"{get_val(latest_row, 'pm10'):.1f} µg/m³")
+col3.metric("Temperature", f"{get_val(latest_row, 'temperature_2m'):.1f} °C")
+col4.metric("Humidity", f"{get_val(latest_row, 'relative_humidity_2m'):.1f} %")
 
 # ---------------------------------------------------------
 # 4. LOAD MODELS & PREDICT
 # ---------------------------------------------------------
+st.markdown("---")
+st.subheader("🔮 3-Day Air Quality Index Forecast")
+
+@st.cache_resource
+def load_models():
+    m1 = joblib.load("best_aqi_model_day1.pkl")
+    m2 = joblib.load("best_aqi_model_day2.pkl")
+    m3 = joblib.load("best_aqi_model_day3.pkl")
+    return m1, m2, m3
+
 try:
     model1, model2, model3 = load_models()
     
@@ -101,7 +110,7 @@ try:
     expected_features = getattr(model1, "feature_names_in_", None)
     
     if expected_features is not None:
-        # Create missing columns with 0 if model expects features not present in dataset
+        # Dynamically create any missing features filled with 0.0
         for col in expected_features:
             if col not in df_live.columns:
                 df_live[col] = 0.0
@@ -128,8 +137,6 @@ try:
 
 except Exception as e:
     st.error(f"❌ Forecast Pipeline Error: `{type(e).__name__}: {e}`")
-    
-    
 
 # ---------------------------------------------------------
 # 5. SIDEBAR & SHAP
@@ -143,6 +150,12 @@ if os.path.exists("shap_summary.png"):
     st.markdown("---")
     st.subheader("🔍 Model Interpretability (SHAP Analysis)")
     st.image("shap_summary.png", caption="Feature Importance & SHAP Values", use_container_width=True)
+
+    
+    
+
+
+
 
 
 
