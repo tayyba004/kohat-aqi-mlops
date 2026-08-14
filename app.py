@@ -31,8 +31,15 @@ def fetch_live_features():
     aqi_url = f"https://air-quality-api.open-meteo.com/v1/air-quality?latitude={LAT}&longitude={LON}&hourly=pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone,european_aqi&past_days=2"
     weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m&past_days=2"
     
-    df_aqi = pd.DataFrame(requests.get(aqi_url).json()['hourly'])
-    df_weather = pd.DataFrame(requests.get(weather_url).json()['hourly'])
+   res = requests.get(weather_url)
+    data = res.json()
+    
+    if 'hourly' not in data:
+        st.error(f"⚠️ Open-Meteo API Error: {data.get('reason', 'Failed to retrieve hourly weather data.')}")
+        st.write("Raw API Response:", data)
+        st.stop()
+        
+    df_weather = pd.DataFrame(data['hourly'])
     
     df_aqi['time'] = pd.to_datetime(df_aqi['time'])
     df_weather['time'] = pd.to_datetime(df_weather['time'])
