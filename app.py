@@ -23,8 +23,8 @@ st.caption("Automated Machine Learning pipeline predicting Air Quality Index usi
 def fetch_live_features():
     """Load and merge local air quality and weather CSV files."""
     # ⚠️ Make sure these filenames match your uploaded files on GitHub!
-    aqi_file = "open-meteo-air quality33.6ON71.4OE5O4m.csv"   
-    weather_file = "open-meteo-weather33.57N71.49E5O4m.csv"   
+    aqi_file = "air quality.csv"   
+    weather_file = "weather.csv"   
     
     if not os.path.exists(aqi_file) or not os.path.exists(weather_file):
         st.error(f"⚠️ Missing files! Could not find `{aqi_file}` or `{weather_file}` in the repository root.")
