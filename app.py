@@ -89,8 +89,8 @@ def load_models():
 try:
     model1, model2, model3 = load_models()
     
-    # Drop timestamp or non-feature columns if needed before feeding to model
-    feature_cols = [c for c in df_live.columns if c not in ['time', 'date']]
+    # Exclude non-feature or metadata columns
+    feature_cols = [c for c in df_live.columns if c not in ['time', 'date', 'aqi']]
     X_input = df_live[feature_cols].iloc[[-1]]
 
     pred_day1 = model1.predict(X_input)[0]
@@ -111,8 +111,11 @@ try:
     st.line_chart(forecast_df)
 
 except Exception as e:
-    st.info("💡 Make sure model `.pkl` files are present in the repo to display live model predictions.")
-
+    # Display the actual underlying exception details
+    st.error(f"❌ Forecast Pipeline Error: `{type(e).__name__}: {e}`")
+    
+    
+   
 # ---------------------------------------------------------
 # 5. MODEL EVALUATION & EXPLAINABILITY
 # ---------------------------------------------------------
